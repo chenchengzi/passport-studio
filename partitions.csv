@@ -1,0 +1,10 @@
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x6000,
+phy_init,   data, phy,     0xf000,   0x1000,
+# The application area ends where the resident installer begins.
+factory,    app,  factory, 0x10000,  0x6ef000,
+# Resident installer: install journal, installer image, saved Wi-Fi networks.
+# The offsets are fixed in components/installer_core/include/inst_layout.h.
+inst_state, data, 0x40,    0x6ff000, 0x1000,
+installer,  app,  test,    0x700000, 0xff000,
+inst_wifi,  data, 0x41,    0x7ff000, 0x1000,

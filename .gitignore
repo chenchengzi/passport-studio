@@ -1,0 +1,14 @@
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+
+# Swift Package Manager and Xcode user state for ios/.
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
+.vscode/
+.idea/
+
+.DS_Store

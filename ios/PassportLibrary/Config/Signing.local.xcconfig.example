@@ -1,0 +1,4 @@
+// Copy to Signing.local.xcconfig. Xcode > Settings > Accounts shows the team
+// ID of your Apple ID ("Personal Team" for a free account).
+PRODUCT_BUNDLE_IDENTIFIER = com.yourname.passport-library
+DEVELOPMENT_TEAM = ABCDE12345
