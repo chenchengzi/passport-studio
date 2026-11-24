@@ -70,7 +70,7 @@ run_static_checks() {
         "${test_dir}/test_demo_${demo}_runtime"
     done
 
-    # Installer, Passport Link, and the weather example.
+    # Installer, Passport Link, and the weather and T3 status examples.
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror \
         -Icomponents/installer_core/include -Itests/installer_support \
         tests/test_installer_core.c components/installer_core/inst_table.c \
@@ -86,6 +86,12 @@ run_static_checks() {
         examples/wifi-weather/main/weather_i18n.c \
         -o "${test_dir}/test_weather_logic"
     "${test_dir}/test_weather_logic"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Iexamples/t3-status/main \
+        tests/test_t3_logic.c examples/t3-status/main/t3_logic.c \
+        -o "${test_dir}/test_t3_logic"
+    "${test_dir}/test_t3_logic"
+    node --check examples/t3-status/bridge/bridge.mjs
+    node tests/test_t3_bridge.mjs
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_build_installer_bundle.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_archive_firmware.py
@@ -134,6 +140,19 @@ run_firmware_checks() (
         --archive-root "${repo_root}/build/firmware" --project Wifi-Weather
     install -m 0644 "${build_dir}/wifi-weather/Wifi-Weather-full.bin" \
         "${repo_root}/build/Wifi-Weather-merged.bin"
+
+    # T3 Code status display, installed through the iPhone app.
+    SDKCONFIG_DEFAULTS="${repo_root}/examples/t3-status/sdkconfig.defaults" \
+        idf.py -C examples/t3-status -B "${build_dir}/t3-status" \
+        -D "SDKCONFIG=${build_dir}/t3-status/sdkconfig" build
+    idf.py -C examples/t3-status -B "${build_dir}/t3-status" \
+        -D "SDKCONFIG=${build_dir}/t3-status/sdkconfig" \
+        merge-bin -o T3-Status-full.bin
+    python3 tools/verify_firmware.py "${build_dir}/t3-status" T3-Status
+    python3 tools/archive_firmware.py create "${build_dir}/t3-status" \
+        --archive-root "${repo_root}/build/firmware" --project T3-Status
+    install -m 0644 "${build_dir}/t3-status/T3-Status-full.bin" \
+        "${repo_root}/build/T3-Status-merged.bin"
 
     # Official hardware-test demo, as a board self-check.
     SDKCONFIG_DEFAULTS="${repo_root}/examples/hardware-demo/sdkconfig.defaults" \

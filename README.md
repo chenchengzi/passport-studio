@@ -13,6 +13,7 @@
 | 自研应用读取手机配置的 Wi-Fi | `components/passport_wifi/` |
 | 自研应用与手机的蓝牙通道 Passport Link | `components/passport_link/` |
 | 示例应用：Wi-Fi 天气（Wi-Fi + Passport Link） | `examples/wifi-weather/` |
+| 示例应用：T3 Code 状态屏（Mac 桥接 + 局域网轮询） | `examples/t3-status/` |
 | 官方硬件测试演示（硬件 API 参考、板子自检） | `examples/hardware-demo/` |
 | 板级支持（来自 FoloToy ai-passport） | `components/bsp/` |
 
@@ -34,7 +35,7 @@
 ```bash
 ./tools/validate.sh --static     # 主机测试：BSP、硬件演示、安装器核心、Passport Link、天气逻辑、固件工具
 ./tools/validate.sh --ios        # PassportKit 测试（需要 Xcode）
-./tools/validate.sh --firmware   # 安装器、首次安装镜像、两个示例（需要激活 ESP-IDF）
+./tools/validate.sh --firmware   # 安装器、首次安装镜像、示例应用（需要激活 ESP-IDF）
 ```
 
 1. **首次安装**：把 `build/Passport-Installer-FirstInstall-full.bin` 从 `0x0` 刷入设备（USB 或
