@@ -283,6 +283,9 @@ final class CommunityTests: XCTestCase {
         XCTAssertEqual(PlayReference.parse("https://ai-passport.folotoy.cn/plays/xiaozhi-ai-chatbot"),
                        .slug("xiaozhi-ai-chatbot"))
         XCTAssertEqual(PlayReference.parse("https://ai-passport.folotoy.cn/api/plays/id/2494"), .id(2494))
+        XCTAssertEqual(PlayReference.parse(
+            "https://ai-passport.folotoy.cn/plays/community/2174/vibe?mp_flow=x&utm_source=wechat_miniapp"), .id(2174))
+        XCTAssertEqual(PlayReference.parse("https://ai-passport.folotoy.cn/plays/2174/?utm_medium=app"), .id(2174))
         XCTAssertEqual(PlayReference.parse("https://apsimulator.folotoy.cn/?play=2494"), .id(2494))
         XCTAssertEqual(PlayReference.parse("  community-52fee465 "), .slug("community-52fee465"))
         XCTAssertEqual(PlayReference.parse("2494"), .id(2494))

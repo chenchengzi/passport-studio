@@ -25,7 +25,10 @@ public enum PlayReference: Equatable {
             }
             let parts = url.pathComponents.filter { $0 != "/" }
             if let index = parts.firstIndex(where: { $0 == "plays" || $0 == "play" }), index + 1 < parts.count {
-                if parts[index + 1] == "id", index + 2 < parts.count { return fromToken(parts[index + 2]) }
+                // /plays/id/<n> and the mini-program's /plays/community/<n>/vibe
+                if ["id", "community"].contains(parts[index + 1]), index + 2 < parts.count {
+                    return fromToken(parts[index + 2])
+                }
                 return fromToken(parts[index + 1])
             }
             return nil
