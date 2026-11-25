@@ -8,7 +8,7 @@ set(EXTRA_COMPONENT_DIRS
     "${CMAKE_CURRENT_LIST_DIR}/../../components/installer_core"
     "${CMAKE_CURRENT_LIST_DIR}/../../components/passport_wifi"
     "${CMAKE_CURRENT_LIST_DIR}/../../components/passport_link")
-set(PROJECT_VER "0.3.0")
+set(PROJECT_VER "0.4.1")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(T3-Status)

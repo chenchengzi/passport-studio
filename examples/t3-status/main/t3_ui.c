@@ -29,6 +29,8 @@
 //   │ └──────────────────────┘ │
 //   │   上下键切换 · OK 返回    │
 // A pairing card with the six-digit code covers the middle while pairing.
+// After a new approval request (amber) or a finished run (blue) a border along
+// the screen edge can flash on any page until a key press or the set duration.
 // Chinese uses Noto Sans SC subsets (fonts/generate_fonts.py) with Montserrat
 // as the fallback for LVGL symbols.
 #include "t3_ui.h"
@@ -50,6 +52,7 @@
 #define COLOR_ERROR   0xFF5C5C
 #define LOCK_MS       1000
 #define BACKLIGHT     70
+#define FLASH_WIDTH   6
 
 LV_FONT_DECLARE(t3_font_zh_14);
 LV_FONT_DECLARE(t3_font_zh_20);
@@ -66,6 +69,8 @@ static card_t s_run, s_wait, s_done;
 static lv_obj_t *s_pair, *s_pair_code;
 static lv_obj_t *s_task, *s_task_state, *s_task_project, *s_task_title, *s_task_elapsed, *s_task_empty;
 static lv_obj_t *s_task_detail, *s_task_bg;
+static lv_obj_t *s_flash;
+static t3_flash_kind_t s_flash_kind;
 static int32_t s_detail_y, s_line_14;
 
 static lv_obj_t *label(lv_obj_t *parent, const lv_font_t *font, uint32_t color)
@@ -238,6 +243,15 @@ bool t3_ui_init(void)
     lv_obj_align(pair_hint, LV_ALIGN_BOTTOM_MID, 0, -2);
     lv_obj_set_hidden(s_pair, true);
 
+    // Border flash along the rounded screen edge, above every page.
+    s_flash = lv_obj_create(lv_layer_top());
+    lv_obj_remove_style_all(s_flash);
+    lv_obj_set_size(s_flash, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_style_radius(s_flash, BSP_LVGL_SCREEN_RADIUS, 0);
+    lv_obj_set_style_border_width(s_flash, FLASH_WIDTH, 0);
+    lv_obj_set_style_border_opa(s_flash, LV_OPA_COVER, 0);
+    lv_obj_set_hidden(s_flash, true);
+
     lv_screen_load(scr);
     bsp_lvgl_unlock();
     return true;
@@ -246,6 +260,18 @@ bool t3_ui_init(void)
 void t3_ui_screen(bool on)
 {
     bsp_display_backlight(on ? BACKLIGHT : 0);
+}
+
+void t3_ui_flash(t3_flash_kind_t kind)
+{
+    if (kind == s_flash_kind) return;   // redraw the whole screen only on a change
+    if (!bsp_lvgl_lock(LOCK_MS)) return;
+    if (kind != T3_FLASH_NONE) {
+        lv_obj_set_style_border_color(s_flash, lv_color_hex(kind == T3_FLASH_WAIT ? COLOR_WAIT : COLOR_DONE), 0);
+    }
+    lv_obj_set_hidden(s_flash, kind == T3_FLASH_NONE);
+    s_flash_kind = kind;
+    bsp_lvgl_unlock();
 }
 
 void t3_ui_message(const char *title, const char *footer)

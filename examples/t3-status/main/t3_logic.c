@@ -136,6 +136,45 @@ bool t3_done_changed(int64_t prev, int64_t now)
 }
 
 // ---------------------------------------------------------------------------
+// Border flash
+// ---------------------------------------------------------------------------
+void t3_flash_start(t3_flash_t *f, t3_flash_kind_t kind, int64_t now_ms, int32_t interval_s,
+                    int32_t duration_s)
+{
+    if (f->kind > kind) kind = f->kind;
+    f->kind = kind;
+    f->start_ms = now_ms;
+    f->period_ms = (int64_t)(interval_s < 1 ? 1 : interval_s) * 1000;
+    f->end_ms = duration_s > 0 ? now_ms + (int64_t)duration_s * 1000 : 0;
+}
+
+void t3_flash_stop(t3_flash_t *f)
+{
+    *f = (t3_flash_t){0};
+}
+
+t3_flash_kind_t t3_flash_lit(t3_flash_t *f, int64_t now_ms)
+{
+    if (f->kind == T3_FLASH_NONE) return T3_FLASH_NONE;
+    if (f->end_ms && now_ms >= f->end_ms) {
+        t3_flash_stop(f);
+        return T3_FLASH_NONE;
+    }
+    if (now_ms < f->start_ms) return T3_FLASH_NONE;
+    return (now_ms - f->start_ms) % f->period_ms < T3_FLASH_ON_MS ? f->kind : T3_FLASH_NONE;
+}
+
+int64_t t3_flash_next_ms(const t3_flash_t *f, int64_t now_ms)
+{
+    if (f->kind == T3_FLASH_NONE) return -1;
+    if (now_ms < f->start_ms) return f->start_ms - now_ms;
+    int64_t phase = (now_ms - f->start_ms) % f->period_ms;
+    int64_t next = phase < T3_FLASH_ON_MS ? T3_FLASH_ON_MS - phase : f->period_ms - phase;
+    if (f->end_ms && now_ms + next > f->end_ms) next = f->end_ms - now_ms;
+    return next > 0 ? next : 0;
+}
+
+// ---------------------------------------------------------------------------
 // Task list
 // ---------------------------------------------------------------------------
 // Copy [p, end) into out, cut at a UTF-8 character boundary to fit cap.

@@ -92,6 +92,7 @@ run_static_checks() {
     "${test_dir}/test_t3_logic"
     node --check examples/t3-status/bridge/bridge.mjs
     node tests/test_t3_bridge.mjs
+    PYTHONDONTWRITEBYTECODE=1 python3 tools/check_link_info.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_build_installer_bundle.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_verify_firmware.py
     PYTHONDONTWRITEBYTECODE=1 python3 tests/test_archive_firmware.py

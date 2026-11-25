@@ -5,14 +5,16 @@
 // then polls the bridge on the Mac (bridge/bridge.mjs) every POLL_MS and shows
 // how many T3 Code threads are running or waiting for approval.
 // The bridge address and screen timeout come from the iPhone app's Device Link
-// page. Keys (a press that wakes the screen does nothing else):
+// page. Keys (a press that wakes the screen or stops a flash does nothing else):
 //   home       DOWN: task pages; OK: poll now
 //   task page  UP/DOWN: previous/next (UP on the first: home); OK: home
 // Task pages return home after TASK_IDLE_MS without a key. A task page shows
 // what a waiting task asks for, or the running task's latest reply.
 // When a run finishes the home screen highlights it for JUST_DONE_MS (until a
 // key press). A new approval request or a finished run wakes the screen,
-// unless that is turned off.
+// unless that is turned off, and can flash a border around the screen (amber
+// for approval, blue for done) at a set interval for a set time or until a
+// key. Flashing keeps the screen lit.
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -82,11 +84,16 @@ static bool s_live;         // the last poll found T3 Code: task pages may open
 static t3_detail_t s_detail;
 static char s_detail_id[T3_TASK_ID_LEN + 1];
 static int64_t s_just_done_until_us;   // home highlights the finished run until then
+static t3_flash_t s_flash;
 
 static const passport_link_setting_t SETTINGS[] = {
-    PASSPORT_LINK_TEXT("bridge", "桥接地址（Mac 的 IP，可加 :端口）", "", ADDRESS_MAX),
-    PASSPORT_LINK_INT("screen", "自动关屏（分钟，0 为常亮）", 10, 0, 60),
-    PASSPORT_LINK_BOOL_SETTING("wake", "有新的待批准或任务完成时亮屏", 1),
+    // Labels stay short: the whole schema must fit LINK_INFO_MAX (512 bytes),
+    // checked by tools/check_link_info.py.
+    PASSPORT_LINK_TEXT("bridge", "桥接地址（IP:端口）", "", ADDRESS_MAX),
+    PASSPORT_LINK_INT("screen", "关屏分钟（0 常亮）", 10, 0, 60),
+    PASSPORT_LINK_BOOL_SETTING("wake", "待批准或完成时亮屏", 1),
+    PASSPORT_LINK_INT("flash_every", "闪烁间隔秒数", 2, 1, 10),
+    PASSPORT_LINK_INT("flash_for", "闪烁秒数（0 关闭）", 30, 0, 600),
 };
 static const char *const CHANNELS[] = {"time"};
 
@@ -128,6 +135,22 @@ static void on_connection(bool connected, void *user)
 // ---------------------------------------------------------------------------
 // Status task
 // ---------------------------------------------------------------------------
+static int64_t now_ms(void)
+{
+    return esp_timer_get_time() / 1000;
+}
+
+static void flash_update(void)
+{
+    t3_ui_flash(t3_flash_lit(&s_flash, now_ms()));
+}
+
+static void flash_stop(void)
+{
+    t3_flash_stop(&s_flash);
+    t3_ui_flash(T3_FLASH_NONE);
+}
+
 static void screen_wake(void)
 {
     s_last_activity_us = esp_timer_get_time();
@@ -140,7 +163,7 @@ static void screen_wake(void)
 static void screen_check(void)
 {
     int32_t minutes = passport_link_get_int("screen");   // 0: always on
-    if (minutes > 0 && s_screen_on &&
+    if (minutes > 0 && s_screen_on && s_flash.kind == T3_FLASH_NONE &&
         esp_timer_get_time() - s_last_activity_us >= (int64_t)minutes * 60 * 1000000) {
         t3_ui_screen(false);
         s_screen_on = false;
@@ -192,13 +215,21 @@ static wake_t wait_event(int64_t timeout_ms)
         int64_t now = esp_timer_get_time();
         if (now >= deadline) return WAKE_TIMEOUT;
         int64_t step = deadline - now < 1000000 ? deadline - now : 1000000;
+        int64_t edge_ms = t3_flash_next_ms(&s_flash, now / 1000);
+        if (edge_ms >= 0 && edge_ms * 1000 < step) step = edge_ms * 1000;
         event_t ev;
         if (xQueueReceive(s_events, &ev, pdMS_TO_TICKS(step / 1000 + 1)) == pdTRUE) {
             bool was_off = !s_screen_on;
             screen_wake();
             if (ev.kind == EV_SETTINGS) return WAKE_POLL;
+            if (s_flash.kind != T3_FLASH_NONE) {
+                flash_stop();   // the first key only acknowledges the flash
+                s_just_done_until_us = 0;
+                continue;
+            }
             if (!was_off && on_key_press(ev.btn)) return WAKE_POLL;
         }
+        flash_update();
         screen_check();
         if (s_nav.page > 0 && esp_timer_get_time() - s_nav_us >= (int64_t)TASK_IDLE_MS * 1000) {
             s_nav = (t3_nav_t){0};
@@ -288,6 +319,7 @@ static void status_task(void *arg)
             last_wait = 0;
             last_done = 0;
             s_just_done_until_us = 0;
+            flash_stop();
             memcpy(previous, address, sizeof(previous));
         }
         uint16_t port;
@@ -317,16 +349,24 @@ static void status_task(void *arg)
         }
 
         bool woke = false;
+        t3_flash_kind_t news = T3_FLASH_NONE;
         if (view == T3_VIEW_LIVE) {
-            bool wake = passport_link_get_bool("wake");
             if (t3_done_changed(last_done, health.last.done_at)) {
                 s_just_done_until_us = esp_timer_get_time() + (int64_t)JUST_DONE_MS * 1000;
-                woke = wake;
+                news = T3_FLASH_DONE;
             }
-            if (health.last.wait > last_wait) woke = woke || wake;
+            if (health.last.wait > last_wait) news = T3_FLASH_WAIT;
             if (health.last.done_at > 0) last_done = health.last.done_at;
             last_wait = health.last.wait;
         }
+        int32_t flash_for = passport_link_get_int("flash_for");   // 0: off
+        if (flash_for <= 0) {
+            if (s_flash.kind != T3_FLASH_NONE) flash_stop();
+        } else if (news != T3_FLASH_NONE) {
+            t3_flash_start(&s_flash, news, now_ms(), passport_link_get_int("flash_every"), flash_for);
+            woke = true;   // a flash on a dark screen would go unseen
+        }
+        if (news != T3_FLASH_NONE && passport_link_get_bool("wake")) woke = true;
         bool just_done = s_just_done_until_us > esp_timer_get_time();
         if (view == T3_VIEW_LIVE && just_done && health.last.done_title[0]) {
             snprintf(footer, sizeof(footer), T3_TXT_JUST_DONE, health.last.done_title);
@@ -358,6 +398,7 @@ static void status_task(void *arg)
         }
 
         if (woke) screen_wake();
+        flash_update();
         wait_event(POLL_MS);
     }
 }

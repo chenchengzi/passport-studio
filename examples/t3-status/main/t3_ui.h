@@ -10,6 +10,7 @@
 
 bool t3_ui_init(void);
 void t3_ui_screen(bool on);
+void t3_ui_flash(t3_flash_kind_t kind);   // border color, or hidden for T3_FLASH_NONE
 void t3_ui_battery(int percent);          // -1 hides it
 void t3_ui_link(bool connected);          // phone connected over Passport Link
 void t3_ui_passkey(uint32_t passkey);     // 0 hides the pairing card

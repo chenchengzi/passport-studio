@@ -33,7 +33,7 @@
 需要 ESP-IDF 5.5.3（ESP32-C3、8 MB Flash）和 Xcode。
 
 ```bash
-./tools/validate.sh --static     # 主机测试：BSP、硬件演示、安装器核心、Passport Link、天气逻辑、固件工具
+./tools/validate.sh --static     # 主机测试：BSP、硬件演示、安装器核心、Passport Link、天气与 T3 状态逻辑、Link INFO 长度、固件工具
 ./tools/validate.sh --ios        # PassportKit 测试（需要 Xcode）
 ./tools/validate.sh --firmware   # 安装器、首次安装镜像、示例应用（需要激活 ESP-IDF）
 ```

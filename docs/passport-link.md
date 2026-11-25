@@ -72,6 +72,12 @@ Setting types are `bool`, `int` (`min`, `max`), `enum` (`opt`), and `text`
 (`max` bytes). Keys have at most 15 characters (an NVS key). Labels (`n`) are
 shown only on the phone, so they may use any language.
 
+The whole INFO must fit 512 bytes; a Chinese character takes three. When it
+does not, `passport_link_start()` fails and the device does not advertise Link
+at all. `tools/check_link_info.py` (part of `./tools/validate.sh --static`)
+rebuilds each example's INFO from its sources and fails the gate when it is too
+long; keep labels short or merge settings.
+
 ### Messages
 
 Every message is a JSON object with a type `t`.
@@ -103,9 +109,11 @@ need only a phone-side provider.
 Link uses LE Secure Connections with a passkey shown by the application
 (`on_passkey` callback) and stores the bond in the application's NVS, so later
 connections are automatic. The device uses a static random address stored in
-the same NVS namespace. When an install through the installer erases the NVS
-partition, the address changes with the bonds, so iOS treats the device as
-new instead of failing with a stale bond. If an application erases its NVS by
+the same NVS namespace. Reinstalling the same application through the
+installer keeps the NVS partition (see [the installer](bluetooth-installer.md#application-data-on-reinstall)),
+so the address and the bonds stay and the phone reconnects. When an install
+erases the NVS partition, the address changes with the bonds, so iOS treats the
+device as new instead of failing with a stale bond. If an application erases its NVS by
 itself, remove the device in iOS Settings › Bluetooth before pairing again.
 
 ## Device API

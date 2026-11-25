@@ -36,6 +36,34 @@ bool t3_parse_status(const char *json, t3_status_t *out);
 // count, nor does a bridge restart that forgot older completions.
 bool t3_done_changed(int64_t prev, int64_t now);
 
+// Screen border flash after a finished run or a new approval request: lit for
+// T3_FLASH_ON_MS at the start of every period, until end_ms (0: until a key).
+// Waiting outranks done: a done event never turns an amber flash blue.
+#define T3_FLASH_ON_MS 500
+
+typedef enum {
+    T3_FLASH_NONE = 0,
+    T3_FLASH_DONE,
+    T3_FLASH_WAIT,
+} t3_flash_kind_t;
+
+typedef struct {
+    t3_flash_kind_t kind;
+    int64_t start_ms;
+    int64_t end_ms;       // 0: until stopped
+    int64_t period_ms;
+} t3_flash_t;
+
+// Start or restart flashing. interval_s is clamped to at least 1; duration_s
+// 0 or less flashes until t3_flash_stop().
+void t3_flash_start(t3_flash_t *f, t3_flash_kind_t kind, int64_t now_ms, int32_t interval_s,
+                    int32_t duration_s);
+void t3_flash_stop(t3_flash_t *f);
+// The kind to draw now, T3_FLASH_NONE while dark. Ends the flash after end_ms.
+t3_flash_kind_t t3_flash_lit(t3_flash_t *f, int64_t now_ms);
+// Milliseconds until the border next changes; -1 when not flashing.
+int64_t t3_flash_next_ms(const t3_flash_t *f, int64_t now_ms);
+
 // GET /tasks from bridge/bridge.mjs: one line per running or waiting thread,
 // waiting first, five tab-separated fields:
 //   w|r <TAB> started (Unix seconds, 0 if unknown) <TAB> id (1-8 letters and

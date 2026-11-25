@@ -288,6 +288,42 @@ static void test_clock(void)
     assert(!strcmp(out, "02-29"));
 }
 
+static void test_flash(void)
+{
+    t3_flash_t f = {0};
+    assert(t3_flash_lit(&f, 0) == T3_FLASH_NONE);
+    assert(t3_flash_next_ms(&f, 0) == -1);
+
+    // Every 2 s for 5 s: lit 0-0.5, 2-2.5, 4-4.5, then over.
+    t3_flash_start(&f, T3_FLASH_DONE, 1000, 2, 5);
+    assert(t3_flash_lit(&f, 1000) == T3_FLASH_DONE);
+    assert(t3_flash_next_ms(&f, 1000) == 500);
+    assert(t3_flash_lit(&f, 1499) == T3_FLASH_DONE);
+    assert(t3_flash_lit(&f, 1500) == T3_FLASH_NONE);
+    assert(t3_flash_next_ms(&f, 1500) == 1500);
+    assert(t3_flash_lit(&f, 3200) == T3_FLASH_DONE);
+    assert(t3_flash_next_ms(&f, 5800) == 200);      // cut at the end
+    assert(t3_flash_lit(&f, 6000) == T3_FLASH_NONE);
+    assert(f.kind == T3_FLASH_NONE);
+    assert(t3_flash_next_ms(&f, 6000) == -1);
+
+    // Waiting outranks done; a restart keeps the higher kind and new timing.
+    t3_flash_start(&f, T3_FLASH_WAIT, 0, 1, 10);
+    t3_flash_start(&f, T3_FLASH_DONE, 300, 3, 10);
+    assert(t3_flash_lit(&f, 300) == T3_FLASH_WAIT);
+    assert(t3_flash_lit(&f, 1300) == T3_FLASH_NONE);
+    assert(t3_flash_lit(&f, 3300) == T3_FLASH_WAIT);
+    t3_flash_stop(&f);
+    assert(t3_flash_lit(&f, 3300) == T3_FLASH_NONE);
+
+    // Duration 0 runs until stopped; interval below 1 s is clamped.
+    t3_flash_start(&f, T3_FLASH_DONE, 0, 0, 0);
+    assert(f.period_ms == 1000 && f.end_ms == 0);
+    assert(t3_flash_lit(&f, 3600000) == T3_FLASH_DONE);
+    assert(t3_flash_lit(&f, 3600700) == T3_FLASH_NONE);
+    assert(t3_flash_next_ms(&f, 3600700) == 300);
+}
+
 int main(void)
 {
     test_parse();
@@ -298,6 +334,7 @@ int main(void)
     test_address();
     test_candidates();
     test_clock();
+    test_flash();
     puts("t3 status logic tests: PASS");
     return 0;
 }

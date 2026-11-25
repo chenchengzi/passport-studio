@@ -93,12 +93,17 @@ tab-separated; 404 when the thread is not listed:
    `build/T3-Status-merged.bin` through the app.
 2. On the app's Device Link page, set **bridge** to the Mac's address, such as
    `192.168.1.10` or `192.168.1.10:8787`.
+3. Later versions install the same way. Reinstalling T3-Status keeps its
+   settings and the phone's pairing, so the phone sees the same Link device
+   (see [application data on reinstall](../../docs/bluetooth-installer.md#application-data-on-reinstall)).
 
 | Setting | Default | |
 | --- | --- | --- |
 | `bridge` | empty | Mac address, optional `:port` (8787) |
 | `screen` | 10 | minutes before the screen turns off; 0 keeps it on |
 | `wake` | on | turn the screen on for a new approval request or a finished run |
+| `flash_every` | 2 | seconds between border flashes (1–10); each flash lasts half a second |
+| `flash_for` | 30 | seconds to flash a border around the screen for the same events, amber for approval and blue for done (0–600); 0 turns it off |
 
 The time channel provides the time zone for **Last finished** (`HH:MM` today,
 `MM-DD` otherwise). The display polls every 2 seconds. After three failed polls
@@ -118,7 +123,8 @@ return home after a minute without a key press.
 
 When a run finishes, the home screen outlines **Last finished** in blue and
 the footer shows the thread's title, for ten minutes or until a key press.
-A key press that turns the screen on does nothing else. Both Chinese fonts
+A flash keeps the screen lit and stops at the first key press, which does
+nothing else; a key press that turns the screen on does nothing else either. Both Chinese fonts
 cover the 3755 GB2312 level-1 characters; rarer characters and emoji show as
 placeholder boxes.
 
