@@ -484,9 +484,10 @@ static int gap_event(struct ble_gap_event *event, void *arg)
     return 0;
 }
 
-// A static random address kept in this application's NVS. An install through
-// the installer erases NVS and with it the bonds, and the new address keeps
-// iOS from reusing a bond the device no longer has.
+// A static random address kept in this application's NVS. A reinstall of the
+// same application keeps NVS, the address, and the bonds. Any other install
+// erases NVS and with it the bonds, and the new address keeps iOS from reusing
+// a bond the device no longer has.
 static void on_sync(void)
 {
     ble_addr_t addr;

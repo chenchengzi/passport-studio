@@ -67,6 +67,27 @@ A power cut at any point before the journal is cleared boots the installer
 again. A disconnect keeps the session in RAM; reconnecting and sending the
 same `BEGIN` resumes from the device's position.
 
+## Application data on reinstall
+
+Reinstalling the same application keeps its `nvs` partition: settings,
+Passport Link bonds, and the Bluetooth address survive, so the phone sees the
+same device. The installer keeps it only when all of these hold, and otherwise
+erases it with the rest of the image:
+
+- the installed and the incoming application have the same ESP-IDF project
+  name (`project()` in the top-level `CMakeLists.txt`, stored in
+  `esp_app_desc_t`); the version may differ;
+- both partition tables place `nvs` at the same offset with the same size;
+- the incoming image has only `0xFF` there (a merged image built by
+  `idf.py merge-bin` without prebuilt NVS content);
+- the last install was completed. After an interrupted install the Flash may
+  hold parts of two applications, so the next install starts clean.
+
+The kept sectors are read as `0xFF` when the written image is verified, since
+those are the image's bytes. To start an application from empty data, install
+a different application first. A USB flash of a merged image erases the data
+as before.
+
 ## Compatibility rules
 
 The installer accepts standard merged images (`idf.py merge-bin`, written at

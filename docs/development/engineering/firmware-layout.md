@@ -82,3 +82,7 @@ and flash targets that do not overwrite those data regions. `idf.py erase-flash`
 erases all user data. Do not add it as a routine prerequisite: use it only when
 a complete erase is explicitly intended and any data that must be kept has
 been saved.
+
+Installing through the iPhone app keeps the `nvs` partition when the same
+application is reinstalled and erases it otherwise; see
+[application data on reinstall](../../bluetooth-installer.md#application-data-on-reinstall).

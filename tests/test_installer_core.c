@@ -557,6 +557,150 @@ static void test_install_failures(void)
     puts("  failure paths: PASS");
 }
 
+// ---------------------------------------------------------------------------
+// Keeping an application's data across a reinstall
+// ---------------------------------------------------------------------------
+#define NVS_AT    0x9000u
+#define NVS_SIZE  0x6000u
+
+static image_t app_image(const char *project, unsigned seed)
+{
+    image_t img = synthetic_image(0x30000, seed);
+    uint8_t *desc = img.bytes + 0x10000 + INST_APP_DESC_OFFSET;
+    desc[0] = 0x32; desc[1] = 0x54; desc[2] = 0xCD; desc[3] = 0xAB;
+    memset(desc + INST_APP_PROJECT_AT, 0, INST_APP_PROJECT_MAX);
+    memcpy(desc + INST_APP_PROJECT_AT, project, strlen(project));
+    return img;
+}
+
+static inst_err_t install(inst_session_t *s, const image_t *img)
+{
+    uint8_t sha[32];
+    bool resumed;
+    image_sha(img, sha);
+    inst_err_t err = inst_session_begin(s, img->end, sha, NULL, 0, &resumed);
+    if (err == INST_OK) err = stream(s, img, inst_session_position(s), img->end, 244, 0);
+    return err == INST_OK ? inst_session_commit(s) : err;
+}
+
+// What an application stores while it runs.
+static void put_data(flash_t *f)
+{
+    for (uint32_t i = 0; i < NVS_SIZE; i++) f->mem[NVS_AT + i] = (uint8_t)(i * 13 + 1);
+}
+
+static bool has_data(const flash_t *f)
+{
+    for (uint32_t i = 0; i < NVS_SIZE; i++) {
+        if (f->mem[NVS_AT + i] != (uint8_t)(i * 13 + 1)) return false;
+    }
+    return true;
+}
+
+static bool nvs_blank(const flash_t *f)
+{
+    for (uint32_t i = 0; i < NVS_SIZE; i++) {
+        if (f->mem[NVS_AT + i] != 0xFF) return false;
+    }
+    return true;
+}
+
+static void test_keep_data(void)
+{
+    static inst_session_t s;
+    flash_t *f = flash_new(0x66);
+    inst_ops_t ops = ops_for(f);
+    image_t a1 = app_image("t3_status", 1), a2 = app_image("t3_status", 2);
+    image_t b = app_image("wifi_weather", 3);
+
+    // First install over unknown Flash (corrupt journal): nothing to keep.
+    inst_session_init(&s, &ops);
+    assert(install(&s, &a1) == INST_OK && !s.kept && nvs_blank(f));
+
+    // Same project again: its data stays, the rest is the new image.
+    put_data(f);
+    inst_session_init(&s, &ops);
+    assert(install(&s, &a2) == INST_OK && s.kept && has_data(f));
+    assert(!memcmp(f->mem + 0xF000, a2.bytes + 0xF000, a2.end - 0xF000));
+
+    // A disconnect and resume within one session still keeps it.
+    put_data(f);
+    inst_session_init(&s, &ops);
+    uint8_t sha[32];
+    bool resumed;
+    image_sha(&a1, sha);
+    assert(inst_session_begin(&s, a1.end, sha, NULL, 0, &resumed) == INST_OK);
+    assert(stream(&s, &a1, INST_STREAM_START, 0x12000, 244, 0) == INST_OK);
+    assert(has_data(f));
+    assert(install(&s, &a1) == INST_OK && s.kept && has_data(f));
+
+    // Another project: erased.
+    inst_session_init(&s, &ops);
+    assert(install(&s, &b) == INST_OK && !s.kept && nvs_blank(f));
+
+    // Back to the first project: the other application's data is not kept.
+    put_data(f);
+    inst_session_init(&s, &ops);
+    assert(install(&s, &a1) == INST_OK && !s.kept && nvs_blank(f));
+
+    // Starting one project and switching to another before commit: erased.
+    put_data(f);
+    inst_session_init(&s, &ops);
+    image_sha(&a2, sha);
+    assert(inst_session_begin(&s, a2.end, sha, NULL, 0, &resumed) == INST_OK);
+    assert(stream(&s, &a2, INST_STREAM_START, 0x20000, 244, 0) == INST_OK);
+    assert(install(&s, &b) == INST_OK && !s.kept && nvs_blank(f));
+
+    // An interrupted install, then a restart: the Flash may mix two
+    // applications, so even the same project starts clean.
+    assert(install(&s, &b) == INST_OK);
+    put_data(f);
+    inst_session_init(&s, &ops);
+    image_sha(&b, sha);
+    assert(inst_session_begin(&s, b.end, sha, NULL, 0, &resumed) == INST_OK);
+    assert(stream(&s, &b, INST_STREAM_START, 0x20000, 244, 0) == INST_OK);
+    inst_session_init(&s, &ops);   // power cut
+    assert(install(&s, &b) == INST_OK && !s.kept && nvs_blank(f));
+
+    // An image that brings its own NVS content replaces the data.
+    image_t own = app_image("wifi_weather", 4);
+    memset(own.bytes + NVS_AT + 0x1000, 0x42, 0x100);
+    put_data(f);
+    inst_session_init(&s, &ops);
+    assert(install(&s, &own) == INST_OK && !s.kept);
+    assert(!memcmp(f->mem + NVS_AT, own.bytes + NVS_AT, NVS_SIZE));
+
+    // A different NVS size in the new table: erased.
+    image_t moved = app_image("wifi_weather", 5);
+    uint8_t *t = moved.bytes + INST_TABLE_OFFSET;
+    memset(t, 0xFF, INST_TABLE_MAX);
+    entry(t, 0, 1, 0x02, NVS_AT, 0x5000, "nvs");
+    entry(t, 1, 1, 0x01, 0xF000, 0x1000, "phy_init");
+    entry(t, 2, 0, 0x00, 0x10000, 0x7F0000, "factory");
+    finish_table(t, 3);
+    assert(install(&s, &own) == INST_OK);
+    put_data(f);
+    inst_session_init(&s, &ops);
+    assert(install(&s, &moved) == INST_OK && !s.kept && nvs_blank(f));
+
+    // The verification still catches a wrong hash while data is kept.
+    put_data(f);
+    inst_session_init(&s, &ops);
+    image_sha(&moved, sha);
+    sha[3] ^= 1;
+    assert(inst_session_begin(&s, moved.end, sha, NULL, 0, &resumed) == INST_OK);
+    assert(stream(&s, &moved, INST_STREAM_START, moved.end, 244, 0) == INST_OK);
+    assert(inst_session_commit(&s) == INST_ERR_VERIFY);
+
+    free(a1.bytes);
+    free(a2.bytes);
+    free(b.bytes);
+    free(own.bytes);
+    free(moved.bytes);
+    flash_free(f);
+    puts("  keep application data: PASS");
+}
+
 static void install_file(const char *path)
 {
     FILE *fp = fopen(path, "rb");
@@ -676,6 +820,7 @@ int main(int argc, char **argv)
     test_table();
     test_install();
     test_install_failures();
+    test_keep_data();
     test_wifi();
     for (int i = 1; i < argc; i++) install_file(argv[i]);
     puts("installer core tests: PASS");

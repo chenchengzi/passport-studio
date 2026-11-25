@@ -11,6 +11,12 @@
 //   - SKIP advances over bytes the sender knows are 0xFF.
 //   - SHA-256 covers image bytes [0x8000, end) and is checked by reading the
 //     written Flash back before anything is committed.
+//
+// Reinstalling the same application keeps its data: the "nvs" partition is
+// left as it is when the installed and the incoming table place it at the same
+// offset with the same size, the incoming image has only 0xFF for it, both
+// applications carry the same ESP-IDF project name, and the last install was
+// completed. Otherwise it is erased like the rest of the image.
 #pragma once
 
 #include <stdbool.h>
@@ -31,6 +37,13 @@ typedef struct {
     // Optional: check the application image at offset fits max_size and is intact.
     bool (*verify_app)(void *ctx, uint32_t offset, uint32_t max_size);
 } inst_ops_t;
+
+// esp_app_desc_t inside an application image: after the 24-byte image header
+// and the first 8-byte segment header.
+#define INST_APP_DESC_OFFSET   0x20u
+#define INST_APP_DESC_MAGIC    0xABCD5432u
+#define INST_APP_PROJECT_AT    0x30u      // project_name within esp_app_desc_t
+#define INST_APP_PROJECT_MAX   32u
 
 // sha256 steps
 #define INST_SHA_START  0
@@ -73,6 +86,12 @@ typedef struct {
     uint8_t page[0x1000];
     uint8_t table_sector[INST_TABLE_SECTOR];
     inst_table_plan_t plan;
+    // The installed application's data, read before the first play-area write.
+    bool old_known;              // old_nvs* still hold that application's data
+    uint32_t old_nvs, old_nvs_size;
+    char old_project[INST_APP_PROJECT_MAX + 1];
+    bool keep;                   // this stream leaves old_nvs untouched so far
+    bool kept;                   // the committed install kept it
 } inst_session_t;
 
 void inst_session_init(inst_session_t *s, const inst_ops_t *ops);

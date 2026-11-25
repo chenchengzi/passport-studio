@@ -231,7 +231,7 @@ static void handle_commit(void)
         report_failure();
         return;
     }
-    ESP_LOGI(TAG, "install committed");
+    ESP_LOGI(TAG, "install committed%s", s_session.kept ? ", application data kept" : "");
     if (s_wifi.count > 0) installer_wifi_apply(&s_wifi);
     send_status(INST_PHASE_DONE, 0);
     installer_ui_done();
